@@ -1,8 +1,9 @@
 module Graphs 
 
 import Data.List.Quantifiers
-
+import Data.SnocList.Quantifiers
 import Tensor
+import Data.SnocList 
 
 public export
 Graph : Type -> Type 
@@ -52,12 +53,20 @@ ParaLensF : (par : p -> Type) -> (f : o -> Type) -> p -> o -> o -> Type
 ParaLensF par f p m l = ParaLensSet (par p) (f m) (f l)  
 
 public export
+ParaLensF2 : (p1 -> Type, p2 -> Type) -> (f : o -> Type) -> (p1, p2) -> o -> o -> Type
+ParaLensF2 (par1, par2) f (p1, p2) m l = ParaLensSet (par1 p1, par2 p2) (f m) (f l)  
+
+public export
 ParaLensTensor : ParGraph (List Nat) (List Nat) 
 ParaLensTensor ps ms ls = ParaLensF Tensor Tensor ps ms ls
 
 public export
 ParaLensTensorEnv : ParGraph (List (List Nat)) (List Nat) 
 ParaLensTensorEnv ps ms ls = ParaLensF (All Tensor) Tensor ps ms ls
+
+public export
+ParaLensTensorEnv2 : ParGraph (List (List Nat), SnocList (List Nat)) (List Nat) 
+ParaLensTensorEnv2 (psl, psr) ms ls = ParaLensF2 (All Tensor, SnocList.Quantifiers.All.All Tensor) Tensor (psl, psr) ms ls
 
 
 {-}

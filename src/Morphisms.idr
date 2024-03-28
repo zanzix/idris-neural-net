@@ -4,6 +4,7 @@ import Data.Vect
 
 import Graphs 
 import Tensor 
+import Debug.Trace 
 
 export
 linear : {n, m : Nat} -> ParaLensTensor [m, n] [n] [m] 
@@ -41,26 +42,47 @@ export
 crossEntropyLoss : ParaLensTensor [n] [n] []
 crossEntropyLoss = (getter, setter) where 
   getter : (Tensor [n], Tensor [n]) -> Tensor []
-  getter (y', y) = Scalar (log (foldElem (+) 0 (dvmap exp y)) - foldElem (+) 0 (pointwise (*) y' y))  
+  getter (y', y) = 
+    let Scalar dot' = dot y' y in 
+    Scalar (log (sumElem (dvmap exp y)) - dot')  
+
   setter : ((Tensor [n], Tensor [n]), Tensor []) -> (Tensor [n], Tensor [n])
   setter ((y', y), (Scalar z)) = let 
     expY = dvmap exp y 
-    sumExpY = foldElem (+) 0 expY in 
+    sumExpY = sumElem expY in 
       (dvmap (* (-z)) y, dvmap (* z) (dvmap (/sumExpY) (pointwise (-) expY y')))
-  
+
 export
 softmax : {n : Nat} -> ParaLensTensor [0] [n] [n]
 softmax = (getter, setter) where
   getter : (Tensor [0], Tensor [n]) -> Tensor [n]
   getter (_, x) = let 
-    xMax = foldElem max 0 x
+    xMax = foldElem max (-1.0/0.0) x
     expX = dvmap exp (pointwise (-) x (Dim (replicate n (Scalar xMax))))
-    denom = foldElem (+) 0 expX
+    denom = sumElem expX
       in dvmap (/denom) expX
 
   setter : ((Tensor [0], Tensor [n]), Tensor [n]) -> (Tensor [0], Tensor [n])
   setter ((_, x), y) = let
     z = getter (Dim [], x) 
     cols = Dim (replicate n z) 
-    mat = update (*) cols (update (-) (tabulate eye) (dist cols)) in 
+    mat = pointwise (*) cols (pointwise (-) (tabulate eye) (dist cols)) in 
     (Dim [], joinM mat y)
+
+testSoft : Tensor [1]
+testSoft = let (g, s) = softmax in g (Dim [], Dim [Scalar 1])
+
+public export
+testSoft1 : Tensor [2]
+testSoft1 = let (g, s) = softmax in g (Dim [], Dim [Scalar 1, Scalar 1])
+
+public export
+testSoft2 : Tensor [3]
+testSoft2 = let (g, s) = softmax in g (Dim [], Dim [Scalar 1, Scalar 1, Scalar 1])
+
+public export
+testSoft3 : Tensor [4]
+testSoft3 = let (g, s) = softmax in g (Dim [], Dim [Scalar 1, Scalar 1, Scalar 1, Scalar 4])
+
+run1 : Tensor [2] -> Tensor [2] -> Tensor [] 
+run1  = runPara crossEntropyLoss 

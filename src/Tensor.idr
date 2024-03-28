@@ -1,21 +1,28 @@
 module Tensor 
 import Data.Vect 
 import Data.List.Quantifiers
+import Deriving.Show 
 
 public export
 data Tensor : List Nat -> Type where 
   Scalar : Double -> Tensor Nil 
   Dim : Vect n (Tensor ns) -> Tensor (n :: ns) 
 
+%language ElabReflection
+
+%hint public export
+tensorShow : Show (Tensor ns)
+tensorShow = %runElab derive
+  
 public export
-update : (Double -> Double -> Double) -> Tensor ns -> Tensor ns -> Tensor ns 
-update op (Scalar dbl) (Scalar dbl1) = Scalar (dbl `op` dbl1)
-update op (Dim xs) (Dim ys) = Dim $ zipWith (update op) xs ys 
+pointwise : (Double -> Double -> Double) -> Tensor ns -> Tensor ns -> Tensor ns 
+pointwise op (Scalar dbl) (Scalar dbl1) = Scalar (dbl `op` dbl1)
+pointwise op (Dim xs) (Dim ys) = Dim $ zipWith (pointwise op) xs ys 
 
 public export
 updateEnv : All Tensor ps -> All Tensor ps -> All Tensor ps 
 updateEnv [] [] = []
-updateEnv (x :: z) (y :: w) = update (+) x y :: updateEnv z w
+updateEnv (x :: z) (y :: w) = pointwise (+) x y :: updateEnv z w
 
 public export
 foldElem : (Double -> Double -> Double) -> Double -> Tensor [n] -> Double
@@ -23,11 +30,8 @@ foldElem op acc (Dim []) = acc
 foldElem op acc (Dim ((Scalar dbl) :: xs)) = dbl `op` foldElem op acc (Dim xs) 
 
 public export
-pointwise : (Double -> Double -> Double) -> Tensor [n] -> Tensor [n] -> Tensor [n] 
-pointwise ap (Dim Nil) (Dim Nil) = Dim Nil 
-pointwise ap (Dim ((Scalar t1)::t1s)) (Dim ((Scalar t2)::t2s)) = let 
-  (Dim vecs) = pointwise ap (Dim t1s) (Dim t2s) in 
-  Dim ((Scalar (ap t1 t2)) :: vecs)
+sumElem : Tensor [n] -> Double 
+sumElem t = foldElem (+) 0 t
 
 public export
 dot : Tensor [n] -> Tensor [n] -> Tensor []

@@ -13,6 +13,16 @@ import Train
 model : GPath ParaLensTensor [[2, 2], [2], [0], [2, 2], [2], [0]] [2] [2]
 model = [linear, bias, relu, linear, bias, relu] 
 
+model2 : GPath ParaLensTensor [[2, 2]] [2] [2]
+model2 = [linear]
+
+testConst : Nat -> List (All Tensor [[2], [2]])
+testConst n = take n $ cycle 
+  [ [vec2 0 0, vec2 0 0]
+  , [vec2 0 1, vec2 0 0]
+  , [vec2 1 0, vec2 0 0]
+  , [vec2 1 1, vec2 0 0]
+  ]
 
 dataset : Nat -> List (All Tensor [[2], [2]])
 dataset n = take n $ cycle

@@ -13,8 +13,8 @@ updateParam : {a : List Nat} -> {n : Nat} -> {p : List (List Nat)} ->
   GPath ParaLensTensor p a [n] -> All Tensor [a, [n]] -> All Tensor p -> All Tensor p
 updateParam model [a, b] p = let  
   (_, bw) = eval (learningRate :: crossEntropyLoss :: model)
-  ((x::ns::p'), y) = bw (((Dim [] :: b :: p), a), Dim [])   -- drops the two new parameters? is that good?
-    in updateEnv p p'
+  ((Dim []::ns::p'), y) = bw (((Dim [] :: b :: p), a), Dim [])
+    in updateEnv p p' 
 
 public export
 train : {n : Nat} -> {p : List (List Nat)} -> {a : List Nat} -> 
