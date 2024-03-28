@@ -1,0 +1,3 @@
+An implementation of a simple Neural network in Idris using category theory. 
+
+Based on the code by Tatsuya Hirose: https://zenn.dev/lotz/articles/14458f024674e14f4134
