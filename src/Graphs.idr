@@ -31,6 +31,9 @@ public export
 LensC : (c : obj -> obj -> Type) -> (act: obj -> obj -> obj) -> obj -> obj -> Type 
 LensC c act s a = ((s `c` a), ((act s a) `c` s))
 
+LensC' : (c : obj -> obj -> Type) -> (act: obj -> obj -> obj) -> (obj, obj) -> (obj, obj) -> Type 
+LensC' c act (x, dx) (y, dy) = ((x `c` y), ((act x dy) `c` dx))
+
 public export
 LensSet : Type -> Type -> Type 
 LensSet a b = LensC Set Pair a b 
@@ -41,12 +44,30 @@ ParaC : (c : obj -> obj -> Type) -> (act : par -> obj -> obj) -> par -> obj -> o
 ParaC c act p x y = (act p x) `c` y 
 
 public export
+ParaC' : (c : (obj, obj) -> (obj, obj) -> Type) -> (act : (par, par) -> (obj, obj) -> (obj, obj)) 
+  -> (par, par) -> (obj, obj) -> (obj, obj) -> Type 
+ParaC' c act (p, px) (x, dx) (y, dy) = (act (p, px) (x, dx)) `c` (y, dy) 
+
+public export
+(*) : (Type, Type) -> (Type, Type) -> (Type, Type)
+(x, dx) * (y, dy) = ((x, y), (dx, dy))
+
+
+public export
+ParaBiLensSet : (Type, Type) -> (Type, Type) -> (Type, Type) -> Type 
+ParaBiLensSet (p, px) (m, mx) (l, lx) = ParaC' (LensC' Set Pair) (*) (p, px) (m, mx) (l, lx) 
+
+x : ParaBiLensSet (Nat, Int) (Nat, Int) (Nat, Int) 
+x = (?x_rhs, ?l)
+
+public export
 ParaLensSet : Type -> Type -> Type -> Type 
 ParaLensSet p s t = ParaC (LensC Set Pair) Pair p s t 
 
-public export
-runPara : ParaLensSet p a b -> p -> a -> b
-runPara (get, _) params input = get (params, input)
+
+-- public export
+-- runPara : ParaLensSet p a b -> p -> a -> b
+-- runPara (get, _) params input = get (params, input)
 
 public export
 ParaLensF : (par : p -> Type) -> (f : o -> Type) -> p -> o -> o -> Type
@@ -64,10 +85,89 @@ public export
 ParaLensTensorEnv : ParGraph (List (List Nat)) (List Nat) 
 ParaLensTensorEnv ps ms ls = ParaLensF (All Tensor) Tensor ps ms ls
 
+
+public export
+ParaBiLensF : (par : (p -> Type)) -> (f : o -> Type) -> (p, p) -> (o, o) -> (o, o) -> Type
+ParaBiLensF par f (p, px) (m, mx) (l, lx) = ParaBiLensSet (par p, par px) (f m, f mx) (f l, f lx)  
+
+public export
+ParaBiLensTensor : ParGraph (List Nat, List Nat) (List Nat, List Nat) 
+ParaBiLensTensor (p, px) (m, mx) (l, lx) = ParaBiLensF Tensor Tensor (p, px) (m, mx) (l, lx)
+
+public export
+ParaBiLensF' : (par : (p, p) -> (Type, Type)) -> (f : (o, o) -> (Type, Type)) -> (p, p) -> (o, o) -> (o, o) -> Type
+ParaBiLensF' par f (p, px) (m, mx) (l, lx) = ParaBiLensSet (par (p, px)) (f (m, mx)) (f (l, lx))  
+
+-- ParaBiLensF'' : (par : (p, p) -> Type) -> (f : (o, o) -> Type) -> (p, p) -> (o, o) -> (o, o) -> Type
+-- ParaBiLensF'' par f (p, px) (m, mx) (l, lx) = ParaBiLensSet (par (p, px)) (f (m, mx)) (f (l, lx))  
+
+public export
+BiTens : (List Nat, List Nat) -> (Type, Type)
+BiTens (ls, ns) = (Tensor ls, Tensor ns) 
+
+public export
+ParaBiLensTensor' : ParGraph (List Nat, List Nat) (List Nat, List Nat)
+ParaBiLensTensor' (p, px) (m, mx) (l, lx) = ParaBiLensF' BiTens BiTens (p, px) (m, mx) (l, lx)  
+
+
+bitest1 : ParaBiLensTensor ([n], [n]) ([n], [n]) ([n], [n]) 
+bitest1 = (?x_rhs', ?l')
+
+bitest2 : ParaBiLensTensor' ([n], [n]) ([n], [n]) ([n], [n]) 
+bitest2 = (?x_rhs'', ?l'')
+
+-- public export
+-- ParaBiLensTensorEnv : ParGraph (List (List Nat)) (List Nat) 
+-- ParaBiLensTensorEnv ps ms ls = ParaBiLensF (All Tensor) Tensor ps ms ls
+
+public export
+ParaLensTensorEnvS : ParGraph (SnocList (List Nat)) (List Nat) 
+ParaLensTensorEnvS ps ms ls = ParaLensF (All Tensor) Tensor ps ms ls
+
+public export
+BiEnv : (SnocList (List Nat), SnocList (List Nat)) -> (Type, Type)
+BiEnv (ls, ns) = (Data.SnocList.Quantifiers.All.All Tensor ls, Data.SnocList.Quantifiers.All.All Tensor ns) 
+
+public export
+unzip : SnocList (List Nat, List Nat) -> (SnocList (List Nat), SnocList (List Nat))
+unzip [<] = ([<], [<])
+unzip (sx :< (x, y)) = let (x', y') = unzip sx in (x' :< x, y' :< y) 
+
+public export
+ParaBiLensTensorEnvS : ParGraph (SnocList (List Nat), SnocList (List Nat)) (List Nat, List Nat) 
+ParaBiLensTensorEnvS ps ms ls = ParaBiLensF (Data.SnocList.Quantifiers.All.All Tensor) Tensor ps ms ls
+
+public export
+ParaBiLensTensorEnvS' : ParGraph (SnocList (List Nat), SnocList (List Nat)) (List Nat, List Nat) 
+ParaBiLensTensorEnvS' ps ms ls = ParaBiLensF' BiEnv BiTens ps ms ls
+
+public export
+ParaBiLensTensorEnvS'' : ParGraph (SnocList (List Nat, List Nat)) (List Nat, List Nat) 
+ParaBiLensTensorEnvS'' ps ms ls = ParaBiLensF' BiEnv BiTens (unzip ps) ms ls
+
+data GPath : ParGraph (par, par) (obj, obj) -> ParGraph (SnocList (par, par)) (obj, obj) where 
+  Lin : GPath g [<] a a 
+  (:<) :  GPath g ps a b -> g p b c -> GPath g (ps :< p) a c 
+
+eval : GPath ParaBiLensTensor' ps s t -> ParaBiLensTensorEnvS'' ps s t
+eval [<] = ?wtf
+eval (x :< y) = ?eval_rhs_1
+
+bitest2' : ParaBiLensTensorEnvS'' [< ([n], [n])] ([n], [n]) ([n], [n]) 
+bitest2' = (?x_rhs''', ?l''')
+
 public export
 ParaLensTensorEnv2 : ParGraph (List (List Nat), SnocList (List Nat)) (List Nat) 
 ParaLensTensorEnv2 (psl, psr) ms ls = ParaLensF2 (All Tensor, SnocList.Quantifiers.All.All Tensor) Tensor (psl, psr) ms ls
 
+
+public export
+runGet : ParaLensSet p a b -> p -> a -> b
+runGet (get, _) params input = get (params, input)
+
+public export
+runSet : ParaLensSet p a b -> p -> a -> b
+runSet (get, set) params input = ?sets 
 
 {-}
 
@@ -118,3 +218,4 @@ Unit = (Unit, Unit)
 public export 
 Para : (c : Graph obj) -> Act obj par -> ParGraph obj par 
 Para c act x p y = (act p x) `c` y 
+

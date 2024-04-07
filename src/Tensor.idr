@@ -1,12 +1,17 @@
 module Tensor 
 import Data.Vect 
-import Data.List.Quantifiers
+import Data.SnocList.Quantifiers
 import Deriving.Show 
+import Data.Fin 
 
 public export
 data Tensor : List Nat -> Type where 
   Scalar : Double -> Tensor Nil 
   Dim : Vect n (Tensor ns) -> Tensor (n :: ns) 
+
+-- data Tensor' : List Nat -> Type where 
+--   Scalar' : Double -> Tensor' Nil 
+--   Dim' : (Fin n -> Tensor ns) -> Tensor' (n :: ns) 
 
 %language ElabReflection
 
@@ -21,8 +26,8 @@ pointwise op (Dim xs) (Dim ys) = Dim $ zipWith (pointwise op) xs ys
 
 public export
 updateEnv : All Tensor ps -> All Tensor ps -> All Tensor ps 
-updateEnv [] [] = []
-updateEnv (x :: z) (y :: w) = pointwise (+) x y :: updateEnv z w
+updateEnv [<] [<] = [<]
+updateEnv (z :< x) (w :< y) = updateEnv z w :< pointwise (+) x y 
 
 public export
 foldElem : (Double -> Double -> Double) -> Double -> Tensor [n] -> Double
@@ -39,11 +44,11 @@ dot (Dim []) (Dim []) = Scalar 0
 dot (Dim (Scalar v::v1)) (Dim (Scalar v'::v2)) = 
   let Scalar z = dot (Dim v1) (Dim v2) in 
     Scalar $ (v * v') + z
-  
+
 public export
 joinM : Tensor [m, n] -> Tensor [n] -> Tensor [m] 
 joinM (Dim []) (Dim vec) = Dim []
-joinM (Dim (m::mat)) vec = 
+joinM (Dim (m::mat)) vec =
   let (Dim join) = joinM (Dim mat) vec in
   Dim ((dot m vec) :: join)
 
@@ -66,7 +71,7 @@ public export
 outer : Tensor [m] -> Tensor [n] -> Tensor [m, n] 
 outer (Dim []) (Dim ys) = Dim []
 outer (Dim (x :: xs)) ys = let Dim ys' = outer (Dim xs) ys in 
-  Dim (scalarMult x ys :: ys') where 
+  Dim (scalarMult x ys :: ys') 
 
 public export
 dvmap : (Double -> Double) -> Tensor [n] -> Tensor [n]
@@ -86,3 +91,7 @@ tabulate f = let
 public export
 vec2 : Double -> Double -> Tensor [2] 
 vec2 d1 d2 = Dim [Scalar d1, Scalar d2]
+
+public export
+vec4 : Double -> Double -> Double -> Double -> Tensor [4] 
+vec4 d1 d2 d3 d4 = Dim [Scalar d1, Scalar d2, Scalar d3, Scalar d4]

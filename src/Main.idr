@@ -1,7 +1,8 @@
 module Main 
 
+import System.Random
 import Data.Colist as Co 
-import Data.List.Quantifiers
+import Data.SnocList.Quantifiers
 import Data.Vect 
 
 import Graphs 
@@ -10,56 +11,78 @@ import Path
 import Morphisms 
 import Train 
 
-model : GPath ParaLensTensor [[2, 2], [2], [0], [2, 2], [2], [0]] [2] [2]
-model = [linear, bias, relu, linear, bias, relu] 
+model : GPath ParaLensTensor [< [4, 2], [4], [0], [2, 4], [2], [0]] [2] [2]
+model = [< linear, bias, relu, linear, bias, relu] 
 
-model2 : GPath ParaLensTensor [[2, 2]] [2] [2]
-model2 = [linear]
+layer : GPath ParaLensTensor [< [3, 3], [3], [0]] [3] [3]
+layer  = [< linear, bias, relu]
 
-testConst : Nat -> List (All Tensor [[2], [2]])
+public export
+testConst : Nat -> List (All Tensor [< [2], [2]])
 testConst n = take n $ cycle 
-  [ [vec2 0 0, vec2 0 0]
-  , [vec2 0 1, vec2 0 0]
-  , [vec2 1 0, vec2 0 0]
-  , [vec2 1 1, vec2 0 0]
+  [ [< vec2 0 0, vec2 0 0]
+  , [< vec2 0 1, vec2 0 0]
+  , [< vec2 1 0, vec2 0 0]
+  , [< vec2 1 1, vec2 0 0]
   ]
 
-dataset : Nat -> List (All Tensor [[2], [2]])
+dataset : Nat -> List (All Tensor [< [2], [2]])
 dataset n = take n $ cycle
-  [ [vec2 0 0, vec2 1 0]
-  , [vec2 0 1, vec2 0 1]
-  , [vec2 1 0, vec2 0 1]
-  , [vec2 1 1, vec2 1 0]
+  [ [< vec2 0 0, vec2 1 0]
+  , [< vec2 0 1, vec2 0 1]
+  , [< vec2 1 0, vec2 0 1]
+  , [< vec2 1 1, vec2 1 0]
   ]
 
 k : Double 
 k = 1.224
 
--- some random parameters, picked from a genuinely random list 
-initParams : (All Tensor [[2, 2], [2], [0], [2, 2], [2], [0]])
-initParams = [w1, b1, Dim [], w2, b2, Dim []] where 
-  w1 : Tensor [2, 2]
-  w1 = Dim [vec2 (-1.141 * k) (-0.181 * k), vec2 (-0.583 * k) (0.069 * k)]
-  b1 : Tensor [2]
-  b1 = vec2 (0.491 * k) (-0.670 * k)
-  w2 : Tensor [2, 2]
-  w2 = Dim [vec2 (0.313 * k) (-1.575 * k), vec2 (1.022 * k) (0.745 * k)]
-  b2 : Tensor [2]
-  b2 = vec2 (0.386 * k) (0.745 * k)
+vec2IO : IO $ Tensor [2]
+vec2IO = do 
+  s1 <- randomRIO (-1.0, 1.0)
+  s2 <- randomRIO (-1.0, 1.0)
+  pure $ vec2 s1 s2
+
+vec4IO : IO $ Tensor [4]
+vec4IO = do
+  s1 <- randomRIO (-1.0, 1.0)
+  s2 <- randomRIO (-1.0, 1.0)
+  s3 <- randomRIO (-1.0, 1.0)
+  s4 <- randomRIO (-1.0, 1.0)
+  pure $ vec4 s1 s2 s3 s4
+
+mat24IO : IO $ Tensor [4, 2]
+mat24IO = do 
+  v1 <- vec2IO
+  v2 <- vec2IO
+  v3 <- vec2IO
+  v4 <- vec2IO
+  pure $ Dim [v1, v2, v3, v4]
+
+mat42IO : IO $ Tensor [2, 4]
+mat42IO = do 
+  v1 <- vec4IO
+  v2 <- vec4IO
+  pure $ Dim [v1, v2]
 
 public export
 finally : Nat -> IO () 
 finally n = let 
-  ev = (eval (softmax :: model)) 
-  trained = train model (dataset n) initParams in do 
+  ev = (eval (model :< softmax )) 
+  in do
+    b1 <- vec4IO
+    w1 <- mat24IO
+    b2 <- vec2IO
+    w2 <- mat42IO
+    trained <- pure $ train model (dataset n) [< w1, b1, Dim [], w2, b2, Dim []]
     putStr "\n(0, 0): "
-    print  . getOneProb $ runPara ev (Dim []::trained) (vec2 0 0)
+    print  . getOneProb $ runGet ev (trained :< Dim []) (vec2 0 0)
     putStr "\n(0, 1): "
-    print . getOneProb $ runPara ev (Dim []::trained) (vec2 0 1)
+    print . getOneProb $ runGet ev (trained :< Dim []) (vec2 0 1)
     putStr "\n(1, 0): "
-    print . getOneProb $ runPara ev (Dim []::trained) (vec2 1 0)
+    print . getOneProb $ runGet ev (trained :< Dim []) (vec2 1 0)
     putStr "\n(1, 1): "
-    print . getOneProb $ runPara ev (Dim []::trained) (vec2 1 1)
+    print . getOneProb $ runGet ev (trained :< Dim []) (vec2 1 1)
     putStr "\n"
   where 
     getOneProb : Tensor [2] -> Double

@@ -14,11 +14,17 @@ linear = (getter, setter) where
    setter : ((Tensor [m, n], Tensor [n]), Tensor [m]) -> (Tensor [m, n], Tensor [n])
    setter ((w, x), y) = (outer y x, joinM (dist w) y)
 
-export
+
+-- x : ParaBiLensSet (Nat, Int) (Nat, Int) (Nat, Int) 
+-- x = (?x_rhs, ?l)
+ 
+--bias' : {n : Nat} -> ParaBiLensTensor' ([n], [n]) ([n], [n]) ([n], [n]) 
+--bias' = (?gets', ?x1) 
+export 
 bias : {n : Nat} -> ParaLensTensor [n] [n] [n] 
 bias = (getter, setter) where 
   getter : (Tensor [n], Tensor [n]) -> Tensor [n]
-  getter (b, x) = pointwise (+) b x
+  getter (b, x) = pointwise (+) x b
   setter : ((Tensor [n], Tensor [n]), Tensor [n]) -> (Tensor [n], Tensor [n])
   setter ((b, x), y) = (y, y)
 
@@ -28,7 +34,7 @@ relu = (getter, setter) where
   getter : (Tensor [0], Tensor [n]) -> Tensor [n] 
   getter (_, x) = dvmap (max 0.0) x
   setter : ((Tensor [0], Tensor [n]), Tensor [n]) -> (Tensor [0], Tensor [n])
-  setter ((z, x), y) = (z, pointwise (*) y (dvmap step x)) where
+  setter ((Dim [], x), y) = (Dim [], pointwise (*) y (dvmap step x)) where
     step : Double -> Double 
     step x = if x > 0 then 1 else 0
 
@@ -36,7 +42,7 @@ export
 learningRate : ParaLensTensor [0] [] [0]
 learningRate = (const (Dim []), setter) where
   setter : ((Tensor [0], Tensor []), Tensor [0]) -> (Tensor [0], Tensor [])
-  setter ((_, (Scalar loss)), _) = (Dim [], Scalar (-0.01 * loss))
+  setter ((_, (Scalar loss)), _) = (Dim [], Scalar (-0.2 * loss))
 
 export
 crossEntropyLoss : ParaLensTensor [n] [n] []
@@ -50,7 +56,9 @@ crossEntropyLoss = (getter, setter) where
   setter ((y', y), (Scalar z)) = let 
     expY = dvmap exp y 
     sumExpY = sumElem expY in 
-      (dvmap (* (-z)) y, dvmap (* z) (dvmap (/sumExpY) (pointwise (-) expY y')))
+      (dvmap (* (-z)) y, 
+        dvmap (* z) (
+          ((pointwise (-) (dvmap (/sumExpY) expY) y'))))
 
 export
 softmax : {n : Nat} -> ParaLensTensor [0] [n] [n]
@@ -68,21 +76,3 @@ softmax = (getter, setter) where
     cols = Dim (replicate n z) 
     mat = pointwise (*) cols (pointwise (-) (tabulate eye) (dist cols)) in 
     (Dim [], joinM mat y)
-
-testSoft : Tensor [1]
-testSoft = let (g, s) = softmax in g (Dim [], Dim [Scalar 1])
-
-public export
-testSoft1 : Tensor [2]
-testSoft1 = let (g, s) = softmax in g (Dim [], Dim [Scalar 1, Scalar 1])
-
-public export
-testSoft2 : Tensor [3]
-testSoft2 = let (g, s) = softmax in g (Dim [], Dim [Scalar 1, Scalar 1, Scalar 1])
-
-public export
-testSoft3 : Tensor [4]
-testSoft3 = let (g, s) = softmax in g (Dim [], Dim [Scalar 1, Scalar 1, Scalar 1, Scalar 4])
-
-run1 : Tensor [2] -> Tensor [2] -> Tensor [] 
-run1  = runPara crossEntropyLoss 
