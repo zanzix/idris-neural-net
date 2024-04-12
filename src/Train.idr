@@ -8,7 +8,6 @@ import Path
 import Morphisms 
 import Tensor 
 
-
 public export
 updateParam : {a : List Nat} -> {n : Nat} -> {p : SnocList (List Nat)} -> 
   GPath ParaLensTensor p a [n] -> All Tensor [< a, [n]] -> All Tensor p -> All Tensor p

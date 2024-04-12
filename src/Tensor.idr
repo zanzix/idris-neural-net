@@ -9,10 +9,6 @@ data Tensor : List Nat -> Type where
   Scalar : Double -> Tensor Nil 
   Dim : Vect n (Tensor ns) -> Tensor (n :: ns) 
 
--- data Tensor' : List Nat -> Type where 
---   Scalar' : Double -> Tensor' Nil 
---   Dim' : (Fin n -> Tensor ns) -> Tensor' (n :: ns) 
-
 %language ElabReflection
 
 %hint public export

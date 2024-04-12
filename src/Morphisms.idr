@@ -14,12 +14,6 @@ linear = (getter, setter) where
    setter : ((Tensor [m, n], Tensor [n]), Tensor [m]) -> (Tensor [m, n], Tensor [n])
    setter ((w, x), y) = (outer y x, joinM (dist w) y)
 
-
--- x : ParaBiLensSet (Nat, Int) (Nat, Int) (Nat, Int) 
--- x = (?x_rhs, ?l)
- 
---bias' : {n : Nat} -> ParaBiLensTensor' ([n], [n]) ([n], [n]) ([n], [n]) 
---bias' = (?gets', ?x1) 
 export 
 bias : {n : Nat} -> ParaLensTensor [n] [n] [n] 
 bias = (getter, setter) where 

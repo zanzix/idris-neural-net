@@ -17,15 +17,6 @@ model = [< linear, bias, relu, linear, bias, relu]
 layer : GPath ParaLensTensor [< [3, 3], [3], [0]] [3] [3]
 layer  = [< linear, bias, relu]
 
-public export
-testConst : Nat -> List (All Tensor [< [2], [2]])
-testConst n = take n $ cycle 
-  [ [< vec2 0 0, vec2 0 0]
-  , [< vec2 0 1, vec2 0 0]
-  , [< vec2 1 0, vec2 0 0]
-  , [< vec2 1 1, vec2 0 0]
-  ]
-
 dataset : Nat -> List (All Tensor [< [2], [2]])
 dataset n = take n $ cycle
   [ [< vec2 0 0, vec2 1 0]
@@ -33,9 +24,6 @@ dataset n = take n $ cycle
   , [< vec2 1 0, vec2 0 1]
   , [< vec2 1 1, vec2 1 0]
   ]
-
-k : Double 
-k = 1.224
 
 vec2IO : IO $ Tensor [2]
 vec2IO = do 

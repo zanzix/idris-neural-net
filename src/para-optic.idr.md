@@ -10,7 +10,7 @@ image: code.jpg
 ## Introduction
 Category theory for machine learning has been a big topic recently, both with [Bruno's thesis](https://arxiv.org/abs/2403.13001) dropping, and the [DeepMind paper on using the Para construction for Deep Learning](https://arxiv.org/abs/2402.15332). 
 
-In this blog post we will look at how dependent types can allow us to effortlessly implement the category theory directly, opening up a path to new generalisations. 
+In this blog post we will look at how dependent types can allow us to almost effortlessly implement the category theory directly, opening up a path to new generalisations. 
 
 I will be making heavy use of Tatsuya Hirose's [code that implements the Para(Optic) construction in Haskell](https://zenn.dev/lotz/articles/14458f024674e14f4134). Our goal here is to show that when we make the category theory in the code explicit, it becomes a powerful scaffolding that lets us structure out program.  
 
@@ -20,15 +20,14 @@ All in all, our goal is to formulate this: A simple neural network with static t
 import Data.Fin 
 import Data.Vect 
 
--- model : GradedPath ParaLensTensor (params : [[2, 2], [2], [0], [2, 2], [2]]) [source: 2] [target: 2]
--- model = [linear, bias, relu, linear, bias, relu] 
+-- model : GPath ParaLensTensor [< [4, 2], [4], [0], [2, 4], [2], [0]] [2] [2]
+-- model = [< linear, bias, relu, linear, bias, relu] 
 ```
 
 The cruicial part is the Para construction, which lets us accumulate parameters along the composition of edges. This let's us state the parameters of each edge separately, and then compose them into a larger whole as we go along. 
 
 ## Graded Monoids 
 Para forms a graded category, and in order to understand what this is we will start with a graded monoid first. 
-
 
 ```idris
 namespace Monoid
@@ -44,6 +43,7 @@ namespace Monoid
 --   (::) : a -> List a -> List a 
 ```
 We've seen this data-type in a [previous blog post](https://zanzix.github.io/posts/stlc-idris.html) where we used it to represent variable environments. 
+
 We can use it for much more, though. For instance, let's say that we want to aggregate a series of vectors, and later perform some computation on them. 
 
 Our free graded monoid lets us accumulate a list of vectors, while keeping their sizes in a type-level list. 
@@ -199,7 +199,7 @@ Tensor' (n::ns) = Fin n -> Tensor' ns
 ```
 But unfortunately this will mess up with type inference down the line. Dependent types tend to struggle when it comes to inferring types whose codomain contains arbitrary computation. This is what Conor McBride calls "green slime", and is one of the major pitfalls that functional programmers encounter when they try to make the jump to dependent types. 
 
-For this reason, we will represent our rank-n tensors using a data-type, which will allow Idris to infer the types much easier down the line. Luckily, tensors are easily represented using this data-type I found from a tweet of Kmett (TODO: find tweet).  
+For this reason, we will represent our rank-n tensors using a data-type, which will allow Idris to infer the types much easier down the line. Luckily, tensors are easily represented using an alternative data-type that's popular in Haskell.  
 
 ```idris
 data Tensor : List Nat -> Type where 
@@ -213,61 +213,74 @@ All together, our data-type of parameterised lenses over tensors becomes
 ParaLensTensor : ParGraph (List Nat) (List Nat) 
 ParaLensTensor ns ms ls = ParaLensF Tensor ns ms ls
 ```
-We can now start writing neural networks. I'll be mostly adapting [Tatsuya's code](https://zenn.dev/lotz/articles/14458f024674e14f4134) in the following section. 
+We can now start writing neural networks. I'll be mostly adapting [Tatsuya's code](https://zenn.dev/lotz/articles/14458f024674e14f4134) in the following section. The full code for our project can be found [here](https://github.com/zanzix/idris-neural-net), and I'll only include the most interesting bits. 
 
-TODO: Clean up code, maybe remove matrix-specific things.
+Unlike the original code, we will be using a heterogeneous list - rather than nested tuples - to keep track of all of our parameters, which is why the resulting dimensions will be much easier to track. 
+
 ```idris 
-
-toVect : Tensor [m, n] -> Vect m (Vect n Double)
-fromVect : Vect m (Vect n Double) -> Tensor [m, n]
-
-pointwise : (Double -> Double -> Double) -> Tensor [n] -> Tensor [n] -> Tensor [n] 
-
-joinM : Tensor [m, n] -> Tensor [n] -> Tensor [m] 
-
-dist : Tensor [m, n] -> Tensor [n, m] 
-dist t = ?ts --transpose ?ts
-
-outer : Tensor [m] -> Tensor [n] -> Tensor [m, n] 
-
-dvmap : (Double -> Double) -> Tensor [n] -> Tensor [n]
-
-linear : ParaLensTensor [m, n] [n] [m]
+linear : {n, m : Nat} -> ParaLensTensor [m, n] [n] [m] 
 linear = (getter, setter) where
-  getter : (Tensor [m, n], Tensor [n]) -> Tensor [m]
-  getter (w, x) = (joinM w x)
-  setter : (Tensor [m, n], Tensor [n]) |> Tensor [m] -> (Tensor [m, n], Tensor [n])
-  setter ((w, x), y) = (outer y x, joinM (dist w) y)
+   getter : (Tensor [m, n], Tensor [n]) -> Tensor [m]
+   getter (w, x) = (joinM w x)
+   setter : ((Tensor [m, n], Tensor [n]), Tensor [m]) -> (Tensor [m, n], Tensor [n])
+   setter ((w, x), y) = (outer y x, joinM (dist w) y)
 
 bias : {n : Nat} -> ParaLensTensor [n] [n] [n] 
 bias = (getter, setter) where 
   getter : (Tensor [n], Tensor [n]) -> Tensor [n]
-  getter (b, x) = pointwise (+) b x
-  setter : (Tensor [n], Tensor [n]) |> Tensor [n] -> (Tensor [n], Tensor [n])
+  getter (b, x) = pointwise (+) x b
+  setter : ((Tensor [n], Tensor [n]), Tensor [n]) -> (Tensor [n], Tensor [n])
   setter ((b, x), y) = (y, y)
 
 relu : ParaLensTensor [0] [n] [n] 
 relu = (getter, setter) where 
   getter : (Tensor [0], Tensor [n]) -> Tensor [n] 
   getter (_, x) = dvmap (max 0.0) x
-  setter : (Tensor [0], Tensor [n]) |> Tensor [n] -> (Tensor [0], Tensor [n])
-  setter ((z, x), y) = (z, pointwise (*) y (dvmap step x)) where
+  setter : ((Tensor [0], Tensor [n]), Tensor [n]) -> (Tensor [0], Tensor [n])
+  setter ((Dim [], x), y) = (Dim [], pointwise (*) y (dvmap step x)) where
     step : Double -> Double 
     step x = if x > 0 then 1 else 0
 
-model : GPath ParaLensTensor [[2, 2], [2], [0], [2, 2], [2], [0]] [2] [2]
-model = [linear, bias, relu, linear, bias, relu] 
+learningRate : ParaLensTensor [0] [] [0]
+learningRate = (const (Dim []), setter) where
+  setter : ((Tensor [0], Tensor []), Tensor [0]) -> (Tensor [0], Tensor [])
+  setter ((_, (Scalar loss)), _) = (Dim [], Scalar (-0.2 * loss))
 
--- We need to do an update of parameters. Which requires recursively breaking down a list of tensors
-update:
+crossEntropyLoss : ParaLensTensor [n] [n] []
+crossEntropyLoss = (getter, setter) where 
+  getter : (Tensor [n], Tensor [n]) -> Tensor []
+  getter (y', y) = 
+    let Scalar dot' = dot y' y in 
+    Scalar (log (sumElem (dvmap exp y)) - dot')  
+
+  setter : ((Tensor [n], Tensor [n]), Tensor []) -> (Tensor [n], Tensor [n])
+  setter ((y', y), (Scalar z)) = let 
+    expY = dvmap exp y 
+    sumExpY = sumElem expY in 
+      (dvmap (* (-z)) y, 
+        dvmap (* z) (
+          ((pointwise (-) (dvmap (/sumExpY) expY) y'))))
+
+-- Our final model:             parameters                          source target
+model : GPath ParaLensTensor [< [4, 2], [4], [0], [2, 4], [2], [0]] [2]    [2]
+model = [< linear, bias, relu, linear, bias, relu] 
+
 ```
 All that remains is to implement an algebra for this structure. Normally we would use the generic recursion-schemes machinery to do this, but for now we will implement a one-off fold specialized to graded paths. 
 
 ```idris 
-eval : GPath ParaLensTensor ps s t -> ParaLensTensor p s t  
-eval Nil = ?ids
-eval (e::es) = ?eds 
+-- Evaluate the free graded category over ParaLensTensor
+eval : GPath ParaLensTensor ps s t -> ParaLensTensorEnvS ps s t
+eval [<] = (\(_, s) => s, \((l, s'), s) => ([<], s))
+eval (es :< (fw, bw)) = let (fw', bw') = eval es in 
+  (\((ps :< p), s) => let b = fw' (ps, s) in fw (p, b), 
+  (\(((ps :< p), s), dt) => let 
+    b = fw' (ps, s)
+    (p', b') = bw ((p, b), dt)
+    (ps', s') = bw' ((ps, s), b') 
+    in (ps' :< p', s')))
 ```
+It would actually be possible to write an individual algebra for Lens(C) and Para(C) and then compose them into an algebra Para(Lens(C)), but we can leave that for a future blog post. 
 
 ## Defunctionalizing and Working with the FFI
 Running a neural network in Idris compared to NumPy is going to be obviously slow. However, since we're working entirely with free categories, it means that we don't have to actually evaluate our functions in Idris!  
@@ -283,9 +296,8 @@ data TensorSig : ParGraph (List Nat) (List Nat) where
   CrossEntropyLoss : TensorSig [n] [n] []
   SoftMax : TensorSig [0] [n] [n]
 
-model' : GPath TensorSig [[2, 2], [2], [0], [2, 2], [2], [0]] [2] [2]
-model' = [Linear, Bias, Relu, Linear, Bias, Relu] 
-
+model' : GPath PTensorSig [< [4, 2], [4], [0], [2, 4], [2], [0]] [2]    [2]
+model' = [< Linear, Bias, Relu, Linear, Bias, Relu] 
 ```
 We've also only sketched out the tensor operations, but we could take this a step forward and develop a proper tensor library in Idris. 
 
